@@ -1,0 +1,30 @@
+anton|Anton|Condensed|ofl/anton/Anton-Regular.ttf
+bebasneue|Bebas Neue|Condensed|ofl/bebasneue/BebasNeue-Regular.ttf
+staatliches|Staatliches|Condensed|ofl/staatliches/Staatliches-Regular.ttf
+squadaone|Squada One|Condensed|ofl/squadaone/SquadaOne-Regular.ttf
+archivoblack|Archivo Black|Bold sans|ofl/archivoblack/ArchivoBlack-Regular.ttf
+poppinsbold|Poppins Bold|Bold sans|ofl/poppins/Poppins-Bold.ttf
+poppinsblack|Poppins Black|Bold sans|ofl/poppins/Poppins-Black.ttf
+latoblack|Lato Black|Bold sans|ofl/lato/Lato-Black.ttf
+russoone|Russo One|Bold sans|ofl/russoone/RussoOne-Regular.ttf
+daysone|Days One|Bold sans|ofl/daysone/DaysOne-Regular.ttf
+rubikmonoone|Rubik Mono One|Bold sans|ofl/rubikmonoone/RubikMonoOne-Regular.ttf
+paytoneone|Paytone One|Bold sans|ofl/paytoneone/PaytoneOne-Regular.ttf
+lilitaone|Lilita One|Rounded & fun|ofl/lilitaone/LilitaOne-Regular.ttf
+titanone|Titan One|Rounded & fun|ofl/titanone/TitanOne-Regular.ttf
+luckiestguy|Luckiest Guy|Rounded & fun|apache/luckiestguy/LuckiestGuy-Regular.ttf
+bangers|Bangers|Rounded & fun|ofl/bangers/Bangers-Regular.ttf
+passionone|Passion One|Rounded & fun|ofl/passionone/PassionOne-Regular.ttf
+righteous|Righteous|Rounded & fun|ofl/righteous/Righteous-Regular.ttf
+chango|Chango|Rounded & fun|ofl/chango/Chango-Regular.ttf
+sigmarone|Sigmar One|Rounded & fun|ofl/sigmarone/SigmarOne-Regular.ttf
+graduate|Graduate (varsity)|Varsity & slab|ofl/graduate/Graduate-Regular.ttf
+alfaslabone|Alfa Slab One|Varsity & slab|ofl/alfaslabone/AlfaSlabOne-Regular.ttf
+ultra|Ultra|Varsity & slab|apache/ultra/Ultra-Regular.ttf
+holtwoodonesc|Holtwood One SC|Varsity & slab|ofl/holtwoodonesc/HoltwoodOneSC-Regular.ttf
+blackopsone|Black Ops One|Varsity & slab|ofl/blackopsone/BlackOpsOne-Regular.ttf
+bungee|Bungee|Display|ofl/bungee/Bungee-Regular.ttf
+racingsansone|Racing Sans One|Display|ofl/racingsansone/RacingSansOne-Regular.ttf
+changaone|Changa One|Display|ofl/changaone/ChangaOne-Regular.ttf
+pacifico|Pacifico|Bold script|ofl/pacifico/Pacifico-Regular.ttf
+lobster|Lobster|Bold script|ofl/lobster/Lobster-Regular.ttf

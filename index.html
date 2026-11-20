@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sparkleflock</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+  :root {
+    --bg: #15171d; --panel: #1e2129; --panel2: #262a34; --line: #343946; --text: #e8e9ee; --muted: #9aa0ad;
+    --accent: #c9579a; --accent2: #e07bb6; --warn: #f0b35c; --canvas: #20232c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #app { display: grid; grid-template-rows: auto auto 1fr; height: 100vh; }
+  #top { background: var(--panel); border-bottom: 1px solid var(--line); padding: 8px 14px 0; }
+  #top .bar { display: flex; align-items: center; gap: 12px; }
+  #top .brand { white-space: nowrap; }
+  #top #text { flex: 0 1 620px; min-width: 240px; min-height: 0; height: 40px; resize: none; font-size: 17px; padding: 6px 10px; line-height: 1.3; }
+  #top .texthint { flex: 1 1 0; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #top .undo { margin-left: auto; display: flex; gap: 4px; }
+  #top .undo button { padding: 6px 10px; font-size: 16px; line-height: 1; }
+  #top #copyLink, #top #expSvgTop { white-space: nowrap; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: .5px; }
+  h1 span { color: var(--accent2); }
+  #donate { white-space: nowrap; padding: 6px 12px; border-radius: 6px; background: #ffc439; color: #111; font-weight: 600; font-size: 13px; text-decoration: none; }
+  #donate:hover { background: #f2b51f; }
+  #tabs { display: flex; gap: 2px; margin-top: 8px; overflow-x: auto; scrollbar-width: none; }
+  #tabs button { background: transparent; color: var(--muted); border-radius: 7px 7px 0 0; padding: 7px 14px; font-weight: 600; white-space: nowrap; border-bottom: 2px solid transparent; }
+  #tabs button:hover { color: var(--text); background: #ffffff0a; }
+  #tabs button.on { color: var(--accent2); border-bottom-color: var(--accent2); background: var(--panel2); }
+  #tabs .hide { margin-left: auto; padding: 7px 10px; }
+  #app.collapsed #tabs .hide { visibility: hidden; }
+  #panel { background: var(--panel2); border-bottom: 1px solid var(--line); max-height: 42vh; overflow-y: auto; }
+  #app.collapsed #panel { display: none; }
+  .pane .sec { padding: 10px 16px 14px; columns: 380px 3; column-gap: 32px; max-width: 1500px; }
+  .pane .sec > *, .pane .sec .row { break-inside: avoid; }
+  .pane .sec .row { max-width: 560px; }
+  .pane input[type=number], .pane select { background: #14151a; }
+  [hidden] { display: none !important; }
+  .row { display: grid; grid-template-columns: 118px 1fr 64px 26px; gap: 8px; align-items: center; margin: 6px 0; }
+  .row.wide { grid-template-columns: 118px 1fr; }
+  .row label { color: var(--muted); font-size: 13px; }
+  input, select, textarea, button { font: inherit; color: var(--text); }
+  input[type=number], input[type=text], select, textarea { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; width: 100%; }
+  input[type=number] { padding: 4px 5px; }
+  textarea { resize: vertical; min-height: 64px; font-size: 18px; font-weight: 600; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  .row, .check { position: relative; padding-right: 26px; }
+  .rst { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; padding: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 14px; line-height: 1; border: 0; }
+  .rst:hover { color: var(--accent2); background: #ffffff10; }
+  .check { display: flex; gap: 7px; align-items: center; color: var(--text); font-size: 13px; margin: 6px 0; cursor: pointer; }
+  button { background: var(--accent); border: 0; border-radius: 6px; padding: 7px 12px; cursor: pointer; font-weight: 600; }
+  button:hover { background: var(--accent2); }
+  button.ghost { background: transparent; border: 1px solid var(--line); font-weight: 500; }
+  button.ghost:hover { border-color: var(--accent); }
+  button.on { background: var(--accent); border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { background: transparent; border-radius: 0; padding: 4px 10px; font-weight: 500; }
+  .seg button.on { background: var(--accent); }
+  .hint { color: var(--muted); font-size: 12px; margin: 4px 0; }
+  .warn { color: var(--warn); font-size: 12px; margin: 4px 0; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 5px; }
+  .swatches button { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
+  .swatches button.on { border-color: #fff; }
+  main { grid-row: 3; position: relative; overflow: hidden; background: var(--canvas); min-height: 0; }
+  canvas#view { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+  #toolbar { position: absolute; top: 10px; right: 12px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  #toolbar button { background: #1b1d24e0; border: 1px solid var(--line); font-weight: 500; padding: 5px 10px; }
+  #toolbar button.on { background: var(--accent); border-color: var(--accent); }
+  #toolbar button:hover { border-color: var(--accent); }
+  @media (max-width: 700px) { #toolbar .w { display: none; } }
+  #stats { position: absolute; top: 10px; left: 52px; background: #1b1d24e0; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font-size: 13px; }
+  #stats b { color: var(--accent2); font-size: 16px; }
+  #msg { position: absolute; left: 52px; top: 74px; max-width: 520px; }
+  #msg div { background: #3a2f1ce8; color: var(--warn); border-radius: 6px; padding: 5px 9px; margin-bottom: 4px; font-size: 12px; }
+  #msg button { margin-left: 6px; padding: 3px 9px; font-size: 12px; background: var(--warn); color: #221a0c; }
+  #editHint { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); background: #1b1d24e8; border: 1px solid var(--accent); border-radius: 6px; padding: 5px 12px; font-size: 13px; }
+  #busy { position: absolute; bottom: 40px; right: 14px; color: var(--muted); font-size: 12px; }
+  .help p { margin: 6px 0; font-size: 12.5px; color: #c7cad3; }
+  .help b { color: var(--text); }
+  kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font-size: 11px; }
+  @media (max-width: 800px) {
+    #top { padding: 8px 10px 0; }
+    #top .bar { flex-wrap: wrap; gap: 8px; }
+    #top #text { flex: 1 1 100%; order: 3; }
+    #top .texthint { display: none; }
+    #panel { max-height: 50vh; }
+    .pane .sec { padding: 8px 10px 12px; }
+    .row { grid-template-columns: 104px 1fr 56px 22px; }
+    .row.wide { grid-template-columns: 104px 1fr; }
+  }
+  /* phones: preview on top, settings as a sheet above a bottom tab bar, large touch targets */
+  @media (max-width: 700px) {
+    html, body { font-size: 15px; }
+    #app { height: 100dvh; grid-template-rows: auto minmax(0, 1fr) auto auto; }
+    #top { display: contents; }
+    #top .bar { grid-row: 1; background: var(--panel); border-bottom: 1px solid var(--line); padding: 8px 10px; gap: 6px; }
+    #top .bar .w { display: none; }
+    #top .undo { gap: 6px; }
+    #top .bar button, #donate { min-height: 40px; min-width: 38px; display: inline-flex; align-items: center; justify-content: center; padding: 6px 9px; }
+    #top .undo { gap: 4px; }
+    #top #text { height: 44px; font-size: 18px; min-width: 0; }
+    main { grid-row: 2; }
+    #panel { grid-row: 3; max-height: min(46dvh, calc(100dvh - 400px)); border-bottom: 0; border-top: 1px solid var(--line); overscroll-behavior: contain; }
+    #tabs { grid-row: 4; margin: 0; background: var(--panel); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); gap: 0; }
+    #tabs button { flex: 1 0 auto; border-radius: 0; padding: 14px 6px; border-bottom: 0; border-top: 2px solid transparent; font-size: 13.5px; text-transform: capitalize; }
+    #tabs button.on { border-top-color: var(--accent2); }
+    #tabs .w, #tabs .hide { display: none; }
+    .pane .sec { columns: auto; padding: 10px 12px 14px; }
+    .pane .sec .row { max-width: none; }
+    .row, .row.wide { grid-template-columns: 1fr 84px; gap: 4px 10px; margin: 10px 0; padding-right: 40px; }
+    .row label { grid-column: 1 / -1; font-size: 14px; }
+    .row label:empty { display: none; }
+    .row.wide > :not(label) { grid-column: 1 / -1; }
+    .row > span { position: absolute; right: 44px; bottom: 11px; font-size: 12px; color: var(--muted); pointer-events: none; }
+    .row input[type=number] { padding-right: 30px; }
+    input[type=number], input[type=text], select, textarea { font-size: 16px; min-height: 42px; }
+    input[type=range] { height: 42px; }
+    input[type=checkbox] { width: 22px; height: 22px; flex: none; }
+    .check { font-size: 15px; margin: 12px 0; padding-right: 40px; }
+    .rst { width: 36px; height: 36px; font-size: 18px; top: auto; bottom: 3px; transform: none; }
+    .check .rst { bottom: auto; top: 50%; transform: translateY(-50%); }
+    .seg button { padding: 10px 16px; }
+    .btns button, .pane button.ghost { min-height: 42px; padding: 8px 16px; }
+    .swatches { gap: 10px; }
+    .swatches button { width: 34px; height: 34px; }
+    .hint { font-size: 13px; }
+    .help p { font-size: 14px; }
+    main { display: flex; flex-direction: column; }
+    canvas#view { position: static; flex: 1 1 0; min-height: 0; height: auto; }
+    #toolbar { position: static; flex: none; background: var(--panel); border-top: 1px solid var(--line); padding: 6px 8px; gap: 6px; flex-wrap: nowrap; justify-content: space-between; }
+    #toolbar button { min-height: 40px; min-width: 42px; padding: 6px 10px; white-space: nowrap; background: transparent; }
+    #toolbar #editBtn { margin-right: 0; }
+    #toolbar #zoomOut { margin-left: auto; }
+    #stats { position: static; order: -1; flex: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: var(--panel2); font-size: 12.5px; padding: 6px 10px; }
+    #msg { left: 50px; right: 8px; top: auto; bottom: 100px; max-width: none; }
+    #editHint { position: static; order: 1; flex: none; transform: none; text-align: center; font-size: 12.5px; border-radius: 0; border-width: 1px 0 0; padding: 5px 10px; }
+    #toolbar { order: 2; }
+    #busy { bottom: auto; top: 44px; right: 14px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <div class="bar">
+      <h1 class="brand">Sparkle<span>flock</span></h1>
+      <textarea id="text" rows="1" spellcheck="false" placeholder="Type your text (Enter = new line)"></textarea>
+      <div class="hint texthint">Rhinestone templates from text, for Cricut, Silhouette and other cutters. Enter starts a new line.</div>
+      <div class="undo"><button id="undo" class="ghost" title="Undo (Ctrl+Z)">↶</button><button id="redo" class="ghost" title="Redo (Ctrl+Shift+Z)">↷</button></div>
+      <a id="donate" href="https://www.paypal.com/donate/?hosted_button_id=PZVZSNGSJVZF8" target="_blank" rel="noopener" title="Support Sparkleflock via PayPal">♥<span class="w">&nbsp;Donate</span></a>
+      <button class="ghost" id="copyLink" title="Copy a link that opens this design"><span class="w">Copy&nbsp;</span>link</button>
+      <button id="expSvgTop" title="Export the template as SVG (more formats under Export)">Export<span class="w">&nbsp;SVG</span></button>
+    </div>
+    <nav id="tabs" role="tablist"><button data-tab="text" role="tab">Text</button><button data-tab="size" role="tab">Size</button><button data-tab="stones" role="tab"><span class="w">Rhine</span>stones</button><button data-tab="template" role="tab">Template</button><button data-tab="view" role="tab">View</button><button data-tab="export" role="tab">Export</button><button data-tab="tips" role="tab">Tips</button><button id="tabHide" class="hide" title="Hide settings (click a tab to reopen)">▴</button></nav>
+  </header>
+  <div id="panel">
+    <section class="pane" data-tab="text" role="tabpanel" hidden><div class="sec">
+      <div class="row wide"><label for="font">Font</label><select id="font"></select></div>
+      <div class="row wide"><label></label><div><button class="ghost" id="fontUpBtn" style="padding:4px 10px">Upload font…</button><input type="file" id="fontFile" accept=".ttf,.otf,.woff" hidden></div></div>
+      <div class="row wide"><label>Align lines</label><div class="seg" id="alignSeg"><button data-v="left">Left</button><button data-v="center">Centre</button><button data-v="right">Right</button></div></div>
+      <div class="row"><label for="letterSpR">Letter spacing</label><input type="range" id="letterSpR" min="-20" max="80" step="1"><input type="number" id="letterSp" step="1"><span>%</span></div>
+      <div class="row"><label for="wordSpR">Word spacing</label><input type="range" id="wordSpR" min="-30" max="150" step="1"><input type="number" id="wordSp" step="1"><span>%</span></div>
+      <div class="row"><label for="lineSpR">Line spacing</label><input type="range" id="lineSpR" min="80" max="250" step="1"><input type="number" id="lineSp" step="1"><span>%</span></div>
+      <div class="hint">Spacing values are % of the letter height.</div>
+    </div></section>
+
+    <section class="pane" data-tab="size" role="tabpanel" hidden><div class="sec">
+      <div class="row wide"><label>Units</label><div class="seg" id="unitSeg"><button data-v="mm">mm</button><button data-v="in">inches</button></div></div>
+      <div class="row"><label for="width">Width</label><input type="range" id="widthR"><input type="number" id="width" step="any" min="1"><span class="unit"></span></div>
+      <div class="row"><label for="height">Height</label><input type="range" id="heightR"><input type="number" id="height" step="any" min="1"><span class="unit"></span></div>
+      <label class="check"><input type="checkbox" id="lock"> Keep proportions</label>
+      <div class="btns"><button class="ghost" id="resetStretch">Reset proportions</button></div>
+      <div class="hint">Width and height of the letter outlines. Stones keep their size; bigger letters get more stones.</div>
+    </div></section>
+
+    <section class="pane" data-tab="stones" role="tabpanel" hidden><div class="sec">
+      <div class="row wide"><label for="stone">Stone size</label><select id="stone"></select></div>
+      <div class="row wide"><label for="inner">Inner stones</label><select id="inner"></select></div>
+      <div class="row" id="customRow"><label for="custom">Stone Ø</label><input type="range" id="customR" min="1" max="10" step="0.1"><input type="number" id="custom" step="0.1"><span>mm</span></div>
+      <div class="row"><label for="allowR">Hole allowance</label><input type="range" id="allowR" min="0" max="1" step="0.05"><input type="number" id="allow" step="0.05"><span>mm</span></div>
+      <div class="row"><label for="gapR">Stone spacing</label><input type="range" id="gapR" min="0.2" max="4" step="0.1"><input type="number" id="gap" step="0.1"><span>mm</span></div>
+      <div class="hint" id="stoneInfo"></div>
+      <div class="row wide"><label for="fill">Pattern</label>
+        <select id="fill">
+          <option value="auto">Auto (single line or outline + fill)</option>
+          <option value="centre">Single line (stroke centre)</option>
+          <option value="outline">Outline only</option>
+          <option value="flow">Outline + lines along the stroke</option>
+          <option value="rings">Outline + nested fill</option>
+          <option value="outhex">Outline + grid fill</option>
+          <option value="hex">Grid fill</option>
+        </select></div>
+      <div class="row"><label for="insetR">Edge inset</label><input type="range" id="insetR" min="-1.5" max="2" step="0.1"><input type="number" id="inset" step="0.1"><span>mm</span></div>
+      <div class="row"><label for="boldR">Thicken letters</label><input type="range" id="boldR" min="-2" max="4" step="0.1"><input type="number" id="bold" step="0.1"><span>mm</span></div>
+      <div class="hint">Spacing is the gap between neighbouring holes. Lines along the stroke put an even row of stones around each letter, then run lines of stones through the middle of each stroke (more than one where it is wide enough), offset to sit in the gaps. Nested fill sits each next row in the gaps of the row outside it. Inner stones can be a different size from the outline row (for example SS10 outline, SS8 inside). Inset moves stones in from the letter edge (negative lets them overhang). Thicken fattens or thins the font.</div>
+    </div></section>
+
+    <section class="pane" data-tab="template" role="tabpanel" hidden><div class="sec">
+      <div class="row wide"><label for="mat">Mat / sheet</label><select id="mat"></select></div>
+      <div class="row wide"><label for="rotate">Rotate</label><select id="rotate"><option value="0">No rotation</option><option value="45">45° (longest fit on a square mat)</option><option value="-45">−45°</option><option value="90">90°</option></select></div>
+      <label class="check"><input type="checkbox" id="border"> Cut a border around the design</label>
+      <div class="row" id="borderRow"><label for="borderM">Border margin</label><input type="range" id="borderMR" min="2" max="30" step="0.5"><input type="number" id="borderM" step="any"><span class="unit"></span></div>
+      <label class="check"><input type="checkbox" id="expOutline"> Include letter outlines in export (separate layer, don't cut)</label>
+      <label class="check"><input type="checkbox" id="mirror"> Mirror (flip horizontally)</label>
+    </div></section>
+
+    <section class="pane" data-tab="view" role="tabpanel" hidden><div class="sec">
+      <label class="check"><input type="checkbox" id="showOutline"> Show letter outlines</label>
+      <label class="check"><input type="checkbox" id="showGrid"> Show grid</label>
+      <div class="row wide"><label>Stone colour</label><div class="swatches" id="colours"></div></div>
+    </div></section>
+
+    <section class="pane" data-tab="export" role="tabpanel" hidden><div class="sec">
+      <div class="hint">All formats at once:</div>
+      <div class="btns">
+        <button id="expZip" title="SVG, DXF and PNG in one ZIP file">Download all (ZIP)</button>
+        <button id="expAll" class="ghost" title="SVG, DXF and PNG as three separate downloads">Download all (3 files)</button>
+        <button id="expShare" class="ghost" title="Send the files with your mail or messaging app" hidden>Share / email…</button>
+      </div>
+      <div class="hint">One format:</div>
+      <div class="btns">
+        <button id="expSvg" class="ghost" title="Best for Cricut Design Space and Silhouette Studio Designer Edition">SVG</button>
+        <button id="expDxf" class="ghost" title="For Silhouette Studio Basic Edition and CAD software">DXF</button>
+        <button id="expPng" class="ghost" title="Picture of the stone layout (mockup)">PNG mockup</button>
+      </div>
+      <div class="hint">Exports are at real size in mm, with the holes at your stone size plus the allowance. Share / email opens your device's share sheet with the files attached, so you can mail them to yourself.</div>
+      <div class="hint" id="shareHint" hidden>This browser can't attach files to an email for you. Download the ZIP and attach it, or open this page on a phone to use Share / email.</div>
+      <div class="btns"><button class="ghost" id="resetAll">Reset all</button></div>
+    </div></section>
+
+    <section class="pane help" data-tab="tips" role="tabpanel" hidden><div class="sec">
+      <p><b>Cricut Design Space:</b> Upload → SVG. The size is kept. Select everything and <b>Attach</b> so the holes cut in place, then cut on template material (sticky flock or flock) with the setting for that material.</p>
+      <p><b>Silhouette Studio:</b> Designer Edition opens the SVG. Basic Edition: use the DXF and check the size after import.</p>
+      <p><b>Small holes</b> (SS6 and below) can tear flock. Slow the blade, use 2 passes, or step up to SS10.</p>
+      <p><b>Editing:</b> turn on <b>Edit stones</b> above the preview, then click a stone to remove it or click an empty spot to add one. <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes.</p>
+      <p><b>View:</b> drag to pan, wheel or <kbd>+</kbd>/<kbd>-</kbd> to zoom, <kbd>0</kbd> to fit. On a touch screen, drag with one finger and pinch with two.</p>
+      <p>Templates don't need mirroring: stones are brushed in face up and lifted with transfer tape. Mirror only for special cases.</p>
+    </div></section>
+  </div>
+
+  <main>
+    <canvas id="view"></canvas>
+    <div id="stats"></div>
+    <div id="msg"></div>
+    <div id="toolbar">
+      <button id="editBtn" title="Click stones to remove them, click empty space to add">✎ Edit<span class="w"> stones</span></button>
+      <button id="clearEdits" title="Remove all manual edits">Clear<span class="w"> edits</span></button>
+      <button id="viewBtn" title="Switch between stones and template (holes)">Template view</button>
+      <button id="zoomOut" title="Zoom out (-)">−</button>
+      <button id="zoomIn" title="Zoom in (+)">+</button>
+      <button id="fitBtn" title="Fit (0)">Fit</button>
+    </div>
+    <div id="editHint" hidden>Edit mode: tap a stone to remove it, tap empty space to add one.</div>
+    <div id="busy"></div>
+  </main>
+</div>
+<script src="vendor/opentype.min.js"></script>
+<script src="vendor/clipper.js"></script>
+<script src="fonts/manifest.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
