@@ -18,7 +18,7 @@ const COLOURS = [
   ['blue', 'Blue', '#2c5fd1'], ['aqua', 'Light blue', '#7fd3f0'], ['green', 'Green', '#1f9d55'], ['purple', 'Purple', '#8e4fc9'], ['topaz', 'Topaz', '#f0a030'],
 ];
 const MATS = [
-  ['none', 'None', 0, 0], ['m12', '12 × 12 in mat (Cricut / Cameo)', 304.8, 304.8], ['m24', '12 × 24 in mat (Cricut / Cameo)', 304.8, 609.6],
+  ['none', 'No mat', 0, 0], ['m12', '12 × 12 in mat (Cricut / Cameo)', 304.8, 304.8], ['m24', '12 × 24 in mat (Cricut / Cameo)', 304.8, 609.6],
   ['p8', '8 × 12 in mat (Portrait / Joy Xtra)', 203.2, 304.8], ['j45', '4.5 × 12 in mat (Cricut Joy)', 114.3, 304.8],
   ['a4', 'A4 sheet', 210, 297], ['letter', 'US Letter sheet', 215.9, 279.4],
 ];
@@ -1031,6 +1031,7 @@ const holeD = () => stoneD() + P.allow;
 // inner (fill) stones can be a different size from the outline
 const innerD = () => P.inner === 'same' ? stoneD() : STONES.find(s => s[0] === P.inner)[2];
 const stoneName = d => (STONES.find(s => s[2] === d)?.[1].replace(/ \(.*/, '') || 'Custom') + ' ' + d.toFixed(1) + ' mm';
+const stoneLabel = d => STONES.find(s => s[2] === d)?.[1] || d.toFixed(1) + ' mm stones'; // as in the stone size list: "SS10 (2.8 mm)"
 function capUnits(font) {
   const c = font.tables.os2?.sCapHeight;
   if (c > 0) return c;
@@ -1040,12 +1041,18 @@ function capUnits(font) {
 const CAP = 100; // natural layout: capital letters 100 units tall
 function layoutNatural(font) {
   const fs = CAP * font.unitsPerEm / capUnits(font), k = fs / font.unitsPerEm;
-  const glyphs = [];
+  const glyphs = [], missing = new Set();
   P.text.split('\n').forEach((line, li) => {
     const base = -li * CAP * P.lineSp / 100, row = [];
     let x = 0, prev = null;
     for (const ch of Array.from(line)) {
-      const g = font.charToGlyph(ch);
+      let g = font.charToGlyph(ch);
+      // a character the font lacks is left out (its glyph would be an empty box) and named in a warning;
+      // joiners, variation selectors and accents typed on their own are left out without a word
+      if (!g.index && ch !== ' ') {
+        if (!/\s/.test(ch)) { if (!/[\p{Cf}\p{M}\p{Cc}]/u.test(ch)) missing.add(ch); continue; }
+        g = font.charToGlyph(' ');
+      }
       if (prev) x += font.getKerningValue(prev, g) * k;
       const contours = flatten(g.getPath(0, 0, fs).commands, 0.8);
       if (contours.length) row.push({ ch, contours, ox: x, oy: base });
@@ -1068,7 +1075,7 @@ function layoutNatural(font) {
   for (const g of all) for (const c of g.contours) for (const [x, y] of c) {
     bx0 = Math.min(bx0, x + g.ox); bx1 = Math.max(bx1, x + g.ox); by0 = Math.min(by0, y + g.oy); by1 = Math.max(by1, y + g.oy);
   }
-  return { glyphs: all, b: all.length ? { x0: bx0, y0: by0, x1: bx1, y1: by1, w: bx1 - bx0, h: by1 - by0 } : null };
+  return { glyphs: all, missing: [...missing], b: all.length ? { x0: bx0, y0: by0, x1: bx1, y1: by1, w: bx1 - bx0, h: by1 - by0 } : null };
 }
 
 const glyphCache = new Map();
@@ -1076,7 +1083,7 @@ let built = null, natural = null, fontObj = null;
 async function rebuild() {
   const t0 = performance.now();
   try { fontObj = await getFont(P.font); } catch (e) { fontObj = null; }
-  if (!fontObj) { P.font = DEF.font; fontObj = await getFont(P.font); }
+  if (!fontObj) { P.font = DEF.font; fontObj = await getFont(P.font); lastGeo = geoKey(); }
   natural = layoutNatural(fontObj);
   const hole = holeD(), G = { r: hole / 2, m: P.inset, p: hole + P.gap, thr: hole + P.gap * 0.5, gap: P.gap };
   const ihole = innerD() + P.allow, Gi = { ...G, r: ihole / 2, p: ihole + P.gap, thr: ihole + P.gap * 0.5 };
@@ -1101,10 +1108,9 @@ async function rebuild() {
     }
     // Auto picks one pattern for the whole text, from the typical stroke width
     let mode = P.fill;
-    if (mode === 'auto') {
-      const hs = natural.glyphs.filter(g => g.gl.paths.length).map(g => g.gl.h).sort((a, b) => a - b);
-      mode = hs.length && hs[hs.length >> 1] >= thinLimit(G) ? 'flow' : 'centre';
-    }
+    const hs = natural.glyphs.filter(g => g.gl.paths.length).map(g => g.gl.h).sort((a, b) => a - b);
+    res.thin = !(hs.length && hs[hs.length >> 1] >= thinLimit(G)); // most strokes hold one row only
+    if (mode === 'auto') mode = res.thin ? 'centre' : 'flow';
     res.mode = mode;
     for (const g of natural.glyphs) {
       const gl = g.gl;
@@ -1150,10 +1156,14 @@ async function rebuild() {
   if (mat[2] && !fitsMat(res.ext.w, res.ext.h)) {
     // offer the turn that makes it fit, if there is one
     const alt = flat.find(([d, w, h]) => d !== Math.abs(P.rotate) % 90 && fitsMat(w + 2 * bm, h + 2 * bm));
-    res.warnings.push(`Design is bigger than the ${mat[1]}.` + (alt ? ` <button data-rot="${alt[0]}">${alt[0] ? 'Rotate 45° to fit' : 'Fits unrotated'}</button>` : ''));
+    res.warnings.push(`The design (${fmtLen(res.ext.w)} × ${fmtLen(res.ext.h)}) is bigger than the ${mat[1]}.` + (alt ? ` <button data-rot="${alt[0]}">${alt[0] ? 'Rotate 45° to fit' : 'Fits unrotated'}</button>` : '') +
+      ` Make it smaller, or choose your own mat under Template. <button data-goto="size">Open Size</button>`);
   }
-  if (Math.min(hole, ihole) < 2.3) res.warnings.push('Holes under about 2.3 mm can tear flock: cut slowly or with 2 passes.');
-  if (natural.glyphs.some(g => !g.contours.length)) res.warnings.push('Some characters are missing from this font.');
+  if (Math.min(hole, ihole) < 2.3) res.warnings.push('Holes under about 2.3 mm can tear the template material: cut slowly or with 2 passes, or use a bigger stone.');
+  if (natural.missing.length) {
+    const m = natural.missing, one = m.length === 1;
+    res.warnings.push(`This font has no ${m.slice(0, 8).map(c => '“' + esc(c) + '”').join(', ')}${m.length > 8 ? ' and ' + (m.length - 8) + ' more' : ''}: ${one ? 'it was' : 'they were'} left out. Pick another font under <button data-goto="text">Text</button> or change the text.`);
+  }
   res.ms = performance.now() - t0;
   built = res;
   draw(); updateStats();
@@ -1300,18 +1310,36 @@ function draw() {
   ctx.fillStyle = '#181a20'; ctx.fillRect(0, H - RB, RW, RB);
   ctx.fillStyle = '#7d8495'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(P.units === 'in' ? 'in' : 'mm', RW / 2, H - RB / 2);
 }
+// the patterns as the list names them, and what each one looks like
+const PATTERNS = {
+  auto: ['Automatic', 'A single row for thin letters, an outline with rows inside for bold ones.'],
+  centre: ['Single row', 'One row of stones down the middle of each stroke. Best for thin fonts and small text.'],
+  outline: ['Outline only', 'One row of stones around the edge of each letter, with the inside left empty.'],
+  flow: ['Outline + rows along the letter', 'A row around the edge of each letter, then rows that follow the letter\'s shape through the middle.'],
+  rings: ['Outline + rings inside', 'A row around the edge of each letter, then smaller and smaller copies of it inside, each sitting in the gaps of the one before.'],
+  outhex: ['Outline + honeycomb fill', 'A row around the edge of each letter, with the inside filled in a regular honeycomb grid.'],
+  hex: ['Honeycomb fill only', 'A regular honeycomb grid over the whole letter, with no row around the edge. Edges look rougher.'],
+};
 const fmtLen = mm => P.units === 'in' ? (mm / 25.4).toFixed(2) + ' in' : mm.toFixed(1) + ' mm';
+let statsHtml = '';
 function updateStats() {
   if (!built) return;
   const n = built.stones.length, ni = built.ihole !== built.hole ? built.stones.filter(s => Math.abs(s[3] * 2 - built.ihole) < 1e-6).length : 0;
-  const order = k => '~' + Math.ceil(k * 1.1);
-  const sizes = ni
-    ? `${n - ni} × ${stoneName(stoneD())} (order ${order(n - ni)}) + ${ni} × ${stoneName(innerD())} (order ${order(ni)}) · 10% spare`
-    : `${stoneName(stoneD())} · hole ${built.hole.toFixed(2)} mm · order ${order(n)} with 10% spare`;
-  $('stats').innerHTML = `<b>${n}</b> stones · ${fmtLen(built.ext.w)} × ${fmtLen(built.ext.h)}` +
-    `<br><span style="color:var(--muted);font-size:12px">${sizes}</span>`;
-  $('msg').innerHTML = built.warnings.map(w => `<div>${w}</div>`).join('');
-  $('stoneInfo').textContent = `Hole Ø ${built.hole.toFixed(2)} mm · centre-to-centre ${(built.hole + P.gap).toFixed(2)} mm`;
+  const order = k => Math.ceil(k * 1.1);
+  const sizes = !n ? '' : ni
+    ? `Buy about ${order(n - ni)} × ${stoneLabel(stoneD())} and ${order(ni)} × ${stoneLabel(innerD())} · ${n - ni} + ${ni} stones plus 10% spare`
+    : `Buy about ${order(n)} × ${stoneLabel(stoneD())} · includes 10% spare`;
+  const stats = `<b>${n}</b> stones · ${fmtLen(built.ext.w)} × ${fmtLen(built.ext.h)}${P.mirror ? ' · mirrored' : ''}` +
+    (sizes ? `<br><span style="color:var(--muted);font-size:12px">${sizes}</span>` : '');
+  if (stats !== statsHtml) $('stats').innerHTML = statsHtml = stats; // only on a change, so screen readers hear it once
+  cv.setAttribute('aria-label', n ? `Preview of the template: ${n} stones, ${fmtLen(built.ext.w)} by ${fmtLen(built.ext.h)}` : 'Preview of the template: no stones yet');
+  $('empty').hidden = !!n;
+  if (!n) $('empty').textContent = P.text.trim() ? 'No stones fit this text. Try a bigger size, a smaller stone or another font.' : 'Type your text in the box above to start.';
+  renderMsg();
+  $('stoneInfo').textContent = `Each hole is cut this much wider than the stone, so the stones drop in easily (the hole allowance). 0.3 mm suits most template material. Holes are now ${built.hole.toFixed(2)} mm wide${ni ? ` (${built.ihole.toFixed(2)} mm inside)` : ''}, ${(built.hole + P.gap).toFixed(2)} mm from centre to centre.`;
+  $('fillInfo').textContent = (P.fill === 'auto' && built.mode ? `Automatic picked “${PATTERNS[built.mode][0]}” for this font and size. ` : '') + PATTERNS[P.fill === 'auto' ? built.mode || 'auto' : P.fill][1] +
+    (built.thin && n && !['auto', 'centre'].includes(P.fill) ? ' These letters are too thin for stones inside, so most patterns look alike: make the design bigger, or use a smaller stone or a bolder font.' : '');
+  $('expInfo').textContent = n ? `This design: ${n} holes, ${fmtLen(built.ext.w)} × ${fmtLen(built.ext.h)}. The files are at real size: after opening one in your cutter software, check that it shows this size.` : 'Nothing to export yet: there are no stones in this design.';
   $('clearEdits').disabled = !edits.rm.length && !edits.add.length;
   const e = built.ext;
   if (!lastExt || Math.abs(lastExt.w - e.w) > 0.5 || Math.abs(lastExt.h - e.h) > 0.5) { lastExt = { ...e }; if (!userView) fit(); }
@@ -1382,10 +1410,38 @@ const zoomCentre = f => { const r = cv.getBoundingClientRect(); zoomAt(f, r.widt
 $('zoomIn').onclick = () => zoomCentre(1.3);
 $('zoomOut').onclick = () => zoomCentre(1 / 1.3);
 $('fitBtn').onclick = fit;
-$('editBtn').onclick = () => { editMode = !editMode; $('editBtn').classList.toggle('on', editMode); $('editHint').hidden = !editMode; cv.style.cursor = editMode ? 'crosshair' : ''; };
+$('editBtn').onclick = () => {
+  editMode = !editMode; $('editBtn').classList.toggle('on', editMode); $('editBtn').setAttribute('aria-pressed', editMode);
+  const touch = matchMedia('(pointer: coarse)').matches, v = touch ? 'tap' : 'click';
+  $('editHint').textContent = `Edit mode: ${v} a stone to remove it, ${v} empty space to add one.` + (touch ? ' Pinch to zoom in first.' : ' Esc to finish.');
+  $('editHint').hidden = !editMode; cv.style.cursor = editMode ? 'crosshair' : '';
+};
 $('clearEdits').onclick = () => { edits = { rm: [], add: [] }; changed(true); };
 $('viewBtn').onclick = () => { P.view = P.view === 'template' ? 'stones' : 'template'; syncUi(); changed(false, true); };
 new ResizeObserver(() => resize()).observe(cv);
+
+/* ---------- messages ---------- */
+// notices sit under the build warnings in #msg until they are dismissed, replaced or time out
+const notices = new Map(), noticeTimers = {}; // key -> html
+const INFO = ['hello', 'saved', 'reset']; // notices that are help, not warnings
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let msgHtml = '';
+function renderMsg() {
+  const h = (built?.warnings || []).map(w => `<div>${w}</div>`).join('') +
+    [...notices].map(([k, n]) => `<div${INFO.includes(k) ? ' class="info"' : ''}>${n}<button data-x="${k}" aria-label="Dismiss this message">×</button></div>`).join('');
+  if (h !== msgHtml) $('msg').innerHTML = msgHtml = h;
+}
+function notice(key, html, ms = 0) {
+  notices.set(key, html); renderMsg();
+  clearTimeout(noticeTimers[key]);
+  if (ms) noticeTimers[key] = setTimeout(() => clearNotice(key), ms);
+}
+function clearNotice(key) {
+  clearTimeout(noticeTimers[key]);
+  if (key === 'hello' && notices.has(key)) try { localStorage.setItem('sparkleflock.seen', '1'); } catch {} // the welcome shows until first use
+  if (notices.delete(key)) renderMsg();
+}
+const say = t => { $('live').textContent = ''; setTimeout(() => $('live').textContent = t, 50); }; // for screen readers only
 
 /* ---------- UI binding ---------- */
 const sliders = ['letterSp', 'wordSp', 'lineSp', 'custom', 'allow', 'gap', 'inset', 'bold', 'borderM'];
@@ -1398,11 +1454,11 @@ function fillSelects() {
     fs.appendChild(og);
   }
   for (const s of STONES) $('stone').appendChild(new Option(s[1], s[0]));
-  $('inner').appendChild(new Option('Same as outline', 'same'));
+  $('inner').appendChild(new Option('Same as the outline row', 'same'));
   for (const s of STONES) if (s[0] !== 'custom') $('inner').appendChild(new Option(s[1], s[0]));
   for (const m of MATS) $('mat').appendChild(new Option(m[1], m[0]));
   for (const [id, name, col] of COLOURS) {
-    const b = document.createElement('button'); b.title = name; b.style.background = col; b.dataset.v = id;
+    const b = document.createElement('button'); b.title = name; b.style.background = col; b.dataset.v = id; b.setAttribute('aria-label', name);
     b.onclick = () => { P.colour = id; syncUi(); changed(false, true); };
     $('colours').appendChild(b);
   }
@@ -1425,16 +1481,29 @@ function syncUi() {
   if (document.activeElement !== $('heightR')) $('heightR').value = P.height / U();
   if (document.activeElement !== $('widthR')) $('widthR').value = widthOf() / U();
   for (const el of document.querySelectorAll('.unit')) el.textContent = P.units;
+  // the text box grows with the lines typed, up to three, so a second line stays in sight
+  { const t = $('text'), n = Math.min(3, P.text.split('\n').length); t.style.height = n > 1 ? n * parseFloat(getComputedStyle(t).lineHeight) + 18 + 'px' : ''; }
   $('customRow').hidden = P.stone !== 'custom';
   $('borderRow').hidden = !P.border;
-  for (const b of $('alignSeg').children) b.classList.toggle('on', b.dataset.v === P.align);
-  for (const b of $('unitSeg').children) b.classList.toggle('on', b.dataset.v === P.units);
-  for (const b of $('colours').children) b.classList.toggle('on', b.dataset.v === P.colour);
+  $('stretchRow').hidden = P.stretch === 1;
+  // an Advanced group says how many of its settings are changed, and opens when a link, undo or reset changes one
+  for (const [id, keys] of Object.entries(ADVANCED)) {
+    const d = $(id), c = keys.filter(k => P[k] !== DEF[k]).length;
+    d.querySelector('.n').textContent = c ? ` (${c} changed)` : '';
+    if (c > (+d.dataset.n || 0)) d.open = true;
+    d.dataset.n = c;
+  }
+  const press = (b, on) => { b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); };
+  for (const b of $('alignSeg').children) press(b, b.dataset.v === P.align);
+  for (const b of $('unitSeg').children) press(b, b.dataset.v === P.units);
+  for (const b of $('colours').children) press(b, b.dataset.v === P.colour);
+  $('fontNote').hidden = P.font !== '__custom';
   $('alignSeg').parentElement.hidden = !P.text.includes('\n');
-  $('viewBtn').innerHTML = (P.view === 'template' ? 'Stone' : 'Template') + '<span class="w"> view</span>';
-  $('viewBtn').classList.toggle('on', P.view === 'template');
+  $('viewBtn').innerHTML = P.view === 'template' ? '<span class="w">Show stones</span><span class="nar">Stones</span>' : '<span class="w">Show holes</span><span class="nar">Holes</span>';
+  press($('viewBtn'), P.view === 'template');
   syncResets();
 }
+const ADVANCED = { advStones: ['inner', 'allow', 'inset', 'bold'], advTemplate: ['expOutline', 'mirror'] };
 let timer = null;
 // geometry: rebuild stones; display-only changes just redraw
 // small ↺ button beside every setting that differs from its default; click to put it back
@@ -1445,13 +1514,14 @@ const RESETS = [ // [control id, settings reset by it]
   ['inset', ['inset']], ['bold', ['bold']], ['mat', ['mat']], ['rotate', ['rotate']], ['border', ['border']], ['borderM', ['borderM']],
   ['expOutline', ['expOutline']], ['mirror', ['mirror']], ['showOutline', ['showOutline']], ['showGrid', ['showGrid']], ['colours', ['colour']],
 ];
-const VIEW_ONLY = ['showOutline', 'showGrid', 'colour', 'units'];
+const VIEW_ONLY = ['showOutline', 'showGrid', 'colour', 'units', 'lock', 'expOutline'];
 function addResets() {
   for (const [id, keys] of RESETS) {
     const row = $(id).closest('.row, .check');
     if (!row) continue;
     const b = document.createElement('button');
     b.className = 'rst'; b.type = 'button'; b.title = 'Reset to default'; b.textContent = '↺'; b.dataset.keys = keys.join(' ');
+    b.setAttribute('aria-label', `Reset ${(row.querySelector('label') || row).textContent.trim().toLowerCase()} to default`);
     b.addEventListener('click', ev => {
       ev.preventDefault(); ev.stopPropagation();
       for (const k of keys) P[k] = DEF[k];
@@ -1463,25 +1533,85 @@ function addResets() {
 function syncResets() {
   for (const b of document.querySelectorAll('.rst')) b.hidden = b.dataset.keys.split(' ').every(k => P[k] === DEF[k]);
 }
+// manual edits are positions in one particular layout. Any setting that moves the stones makes them
+// land in the wrong places, so they are cleared then (undo brings them back, with the old setting).
+const geoKey = () => JSON.stringify(['text', 'font', 'align', 'letterSp', 'wordSp', 'lineSp', 'height', 'stretch', 'stone', 'inner', 'custom', 'allow', 'gap', 'fill', 'inset', 'bold'].map(k => P[k]).concat(customN));
+let lastGeo = '', customN = 0, editsAt = -1;
+function dropStaleEdits() {
+  const key = geoKey();
+  if (key === lastGeo) return;
+  lastGeo = key;
+  if (restoring || !(edits.rm.length || edits.add.length)) return;
+  const n = edits.rm.length + edits.add.length;
+  edits = { rm: [], add: [] }; editsAt = hi;
+  notice('edits', `${n} manual stone edit${n > 1 ? 's were' : ' was'} cleared because the layout changed.<button data-act="edits">Undo the change</button>`, 15000);
+}
+// one build at a time; an error is shown instead of leaving "Placing stones…" up
+let building = null, busyTimer = null;
+function runBuild() {
+  const run = (building || Promise.resolve()).then(async () => {
+    let took = '';
+    try {
+      await rebuild(); syncUi(); clearNotice('err');
+      if (built.ms >= 500) took = `${built.ms.toFixed(0)} ms`; // the time is only worth showing when it was slow
+    } catch (e) {
+      console.error(e);
+      notice('err', 'Could not place the stones: ' + esc(e?.message || e));
+    }
+    if (building === run) building = null;
+    if (timer || building) return; // another build is on its way
+    clearTimeout(busyTimer);
+    $('busy').textContent = took;
+    if (took) busyTimer = setTimeout(() => $('busy').textContent = '', 2500);
+  });
+  return building = run;
+}
+// make sure `built` matches the settings (exports must not use the build from before the last keystroke)
+async function flush() {
+  if (timer) { clearTimeout(timer); timer = null; await runBuild(); }
+  else if (building) await building;
+}
 function changed(geometry = true, displayOnly = false) {
+  clearNotice('saved'); // it describes the file as it was downloaded
+  dropStaleEdits();
   syncUi(); save(); scheduleSnap();
-  if (displayOnly) { draw(); updateStats(); return; }
-  clearTimeout(timer);
+  if (displayOnly || !geometry) { draw(); updateStats(); return; }
+  clearTimeout(timer); clearTimeout(busyTimer);
   $('busy').textContent = 'Placing stones…';
-  timer = setTimeout(async () => { await rebuild(); syncUi(); $('busy').textContent = built ? `${built.ms.toFixed(0)} ms` : ''; }, 120);
+  timer = setTimeout(() => { timer = null; runBuild(); }, 120);
 }
 function bind() {
-  $('text').addEventListener('input', () => { P.text = $('text').value; changed(); });
+  $('text').addEventListener('input', () => { P.text = $('text').value; clearNotice('hello'); changed(); });
   for (const k of ['font', 'stone', 'inner', 'fill', 'mat']) $(k).addEventListener('change', () => { P[k] = $(k).value; changed(); });
   $('rotate').addEventListener('change', () => { P.rotate = +$('rotate').value; changed(); });
   // the button in the mat warning
-  $('msg').addEventListener('click', ev => { const d = ev.target.dataset?.rot; if (d !== undefined) { P.rotate = +d; syncUi(); changed(); } });
+  $('msg').addEventListener('click', ev => {
+    const { rot, x, act } = ev.target.dataset || {};
+    if (rot !== undefined) { P.rotate = +rot; syncUi(); changed(); }
+    if (x) clearNotice(x);
+    if (act === 'edits') { clearNotice('edits'); if (editsAt >= 0) restore(editsAt); }
+    if (act === 'undo') { clearNotice('reset'); undo(); }
+  });
+  // buttons that open a settings tab (in warnings and in the panel)
+  document.addEventListener('click', ev => {
+    const id = ev.target.closest?.('[data-goto]')?.dataset.goto;
+    if (!id) return;
+    if ($('app').classList.contains('collapsed') || $('app').dataset.tab !== id) showTab(id);
+    $('panel').scrollTop = 0; $('tab-' + id).focus();
+  });
   for (const k of ['lock', 'border', 'expOutline', 'mirror']) $(k).addEventListener('change', () => { P[k] = $(k).checked; changed(k === 'border' || k === 'mirror', k === 'expOutline'); });
   for (const k of ['showOutline', 'showGrid']) $(k).addEventListener('change', () => { P[k] = $(k).checked; changed(false, true); });
   for (const k of sliders) {
-    const set = v => { if (isFinite(v)) { P[k] = v; changed(); } };
+    // typed values are held to the slider's range, as values from a link are
+    const R = $(k + 'R'), set = v => { if (isFinite(v)) { P[k] = Math.min(+R.max, Math.max(+R.min, v)); changed(); } };
     $(k + 'R').addEventListener('input', () => set(+$(k + 'R').value));
-    $(k).addEventListener('input', () => set(k === 'borderM' ? +$(k).value * U() : +$(k).value));
+    $(k).addEventListener('input', () => { if ($(k).value !== '') set(k === 'borderM' ? +$(k).value * U() : +$(k).value); });
+    $(k).addEventListener('change', () => { $(k).value = k === 'borderM' ? +(P[k] / U()).toFixed(3) : P[k]; });
+  }
+  // the label of a slider row names the slider; give the number box beside it the same name
+  for (const row of document.querySelectorAll('.row')) {
+    const num = row.querySelector('input[type=number]'), lab = row.querySelector('label');
+    if (num && lab) num.setAttribute('aria-label', lab.textContent.trim());
   }
   $('height').addEventListener('input', () => {
     const h = +$('height').value * U(); if (!(h > 0)) return;
@@ -1503,12 +1633,21 @@ function bind() {
     if (id && id === cur) id = null;
     app.classList.toggle('collapsed', !id);
     if (id) app.dataset.tab = id;
-    document.querySelectorAll('#tabs [data-tab]').forEach(b => { b.classList.toggle('on', b.dataset.tab === id); b.setAttribute('aria-selected', b.dataset.tab === id); });
+    // one tab stop for the row of tabs: the open tab, or the last one used while the panel is hidden
+    document.querySelectorAll('#tabs [data-tab]').forEach(b => { b.classList.toggle('on', b.dataset.tab === id); b.setAttribute('aria-selected', b.dataset.tab === id); b.tabIndex = b.dataset.tab === (id || app.dataset.tab || 'text') ? 0 : -1; });
     document.querySelectorAll('.pane').forEach(s => s.hidden = s.dataset.tab !== id);
     try { localStorage.setItem('sparkleflock.tab', id || ''); } catch {}
   };
-  document.querySelectorAll('#tabs [data-tab]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+  document.querySelectorAll('#tabs [data-tab]').forEach(b => b.addEventListener('click', () => { clearNotice('hello'); showTab(b.dataset.tab); }));
   $('tabHide').onclick = () => showTab(null);
+  $('tabs').addEventListener('keydown', ev => {
+    const tabs = [...document.querySelectorAll('#tabs [data-tab]')], i = tabs.indexOf(ev.target), n = tabs.length;
+    const j = i < 0 ? -1 : ev.key === 'ArrowRight' ? (i + 1) % n : ev.key === 'ArrowLeft' ? (i + n - 1) % n : ev.key === 'Home' ? 0 : ev.key === 'End' ? n - 1 : -1;
+    if (j < 0 || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    ev.preventDefault();
+    if (!tabs[j].classList.contains('on')) showTab(tabs[j].dataset.tab);
+    tabs[j].focus();
+  });
   // on a phone the settings start closed, so the preview has the screen
   { let t0 = matchMedia('(max-width: 700px)').matches ? '' : 'text'; try { const s = localStorage.getItem('sparkleflock.tab'); if (s !== null) t0 = s; } catch {} showTab(t0 || null); }
   $('resetStretch').onclick = () => { P.stretch = 1; changed(); };
@@ -1517,26 +1656,42 @@ function bind() {
   $('fontUpBtn').onclick = () => $('fontFile').click();
   $('fontFile').onchange = async () => {
     const f = $('fontFile').files[0]; if (!f) return;
+    $('fontFile').value = ''; // so picking the same file again still fires a change
     try {
       customFont = opentype.parse(await f.arrayBuffer());
       const fs = $('font'); fs.querySelector('option[value="__custom"]')?.remove();
       fs.insertBefore(new Option('Uploaded: ' + (customFont.names.fullName?.en || f.name), '__custom'), fs.firstChild);
-      P.font = '__custom'; glyphCache.clear(); changed();
-    } catch (e) { alert('Could not read that font: ' + e.message); }
+      P.font = '__custom'; glyphCache.clear(); customN++; clearNotice('font'); changed();
+    } catch (e) { notice('font', `“${esc(f.name)}” could not be read as a font (${esc(e?.message || e)}). Use a .ttf, .otf or .woff file; the font you had is still in use.`); }
   };
-  $('resetAll').onclick = () => { P = { ...DEF, units: P.units }; edits = { rm: [], add: [] }; userView = false; changed(); };
+  $('resetAll').onclick = () => {
+    clearTimeout(snapTimer); snap(); // the design as it was is one undo step away
+    P = { ...DEF, units: P.units }; edits = { rm: [], add: [] }; userView = false; changed();
+    clearTimeout(snapTimer); snap();
+    notice('reset', 'All settings are back to their defaults.<button data-act="undo">Undo</button>', 15000);
+  };
   $('copyLink').onclick = async () => {
     save();
-    try { await navigator.clipboard.writeText(location.href); $('copyLink').textContent = 'Copied!'; }
+    try { await navigator.clipboard.writeText(location.href); $('copyLink').textContent = 'Copied!'; say('Link copied'); }
     catch { prompt('Copy this link:', location.href); }
     setTimeout(() => $('copyLink').innerHTML = '<span class="w">Copy&nbsp;</span>link', 1500);
   };
   $('expSvg').onclick = exportSvg; $('expDxf').onclick = exportDxf; $('expPng').onclick = exportPng;
   $('expZip').onclick = exportZip; $('expAll').onclick = exportAll; $('expShare').onclick = shareFiles;
-  $('expShare').hidden = !canShareFiles(); $('shareHint').hidden = canShareFiles();
+  $('expShare').hidden = $('shareNote').hidden = !canShareFiles(); $('shareHint').hidden = canShareFiles();
   $('undo').onclick = undo; $('redo').onclick = redo;
+  // shortcut help
+  const help = $('help');
+  const toggleHelp = () => { if (help.open) help.close(); else help.showModal(); };
+  $('helpBtn').onclick = $('helpTips').onclick = toggleHelp;
+  $('helpClose').onclick = () => help.close();
+  help.addEventListener('click', ev => { if (ev.target === help) help.close(); }); // a click on the backdrop
   addEventListener('keydown', ev => {
-    const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName);
+    // typing: only where keys write text or pick an option; a checkbox, slider or radio leaves the shortcuts alone
+    const a = document.activeElement;
+    const typing = !!a && (a.isContentEditable || /^(SELECT|TEXTAREA)$/.test(a.tagName) || (a.tagName === 'INPUT' && !/^(checkbox|radio|range|button|submit|reset|file|color|image)$/.test(a.type)));
+    if (help.open) { if (ev.key === 'Escape' || ev.key === '?') { ev.preventDefault(); help.close(); } return; }
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === 's') { ev.preventDefault(); exportSvg(); return; }
     if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && ev.key.toLowerCase() === 'z' && !typing) { ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y' && !typing) { ev.preventDefault(); redo(); return; }
     if (typing || ev.ctrlKey || ev.metaKey || ev.altKey) return;
@@ -1544,6 +1699,8 @@ function bind() {
     else if (ev.key === '-' || ev.key === '_') zoomCentre(1 / 1.3);
     else if (ev.key === '0') fit();
     else if (ev.key === 'Escape' && editMode) $('editBtn').click();
+    else if (ev.key === '?') { ev.preventDefault(); toggleHelp(); }
+    else if (ev.key.toLowerCase() === 'e') $('editBtn').click();
   });
 }
 
@@ -1561,21 +1718,40 @@ function restore(to) {
   clearTimeout(snapTimer); snap();
   if (to < 0 || to >= hist.length) return;
   hi = to; const s = JSON.parse(hist[hi]);
-  restoring = true; P = { ...DEF, ...s.P }; edits = s.edits; changed(); restoring = false; updUndo();
+  restoring = true; P = { ...DEF, ...s.P }; edits = s.edits; clearNotice('edits'); changed(); restoring = false; updUndo();
 }
 const undo = () => restore(hi - 1), redo = () => restore(hi + 1);
 function updUndo() { $('undo').disabled = hi <= 0; $('redo').disabled = hi >= hist.length - 1; }
 
 /* ---------- persistence ---------- */
+// manual edits in the link, as `e`: the removed points, `_`, the added points; each list is x.y.x.y...
+// in 1/100 mm. An uploaded font can't travel, so only its name goes along (`cf`) to explain the fallback.
+const packEdits = () => [edits.rm, edits.add].map(l => l.map(p => Math.round(p[0] * 100) + '.' + Math.round(p[1] * 100)).join('.')).join('_');
+function unpackEdits(str) {
+  const [rm = [], add = []] = String(str).split('_').map(l => {
+    const n = l.split('.').filter(Boolean).map(Number), out = [];
+    for (let i = 0; i + 1 < n.length && out.length < 5000; i += 2) if (isFinite(n[i]) && isFinite(n[i + 1])) out.push([n[i] / 100, n[i + 1] / 100]);
+    return out;
+  });
+  return { rm, add };
+}
+const cleanEdits = e => { const ok = l => (Array.isArray(l) ? l : []).filter(p => Array.isArray(p) && isFinite(p[0]) && isFinite(p[1]) && typeof p[0] === 'number' && typeof p[1] === 'number').map(p => [p[0], p[1]]); return { rm: ok(e?.rm), add: ok(e?.add) }; };
+const customName = () => customFont?.names?.fullName?.en || 'uploaded font';
+let lostFont = ''; // name of an uploaded font that the saved design used
+let stored = false; // this browser holds a design from an earlier visit
 function save() {
-  const sp = new URLSearchParams();
+  const sp = new URLSearchParams(), custom = P.font === '__custom';
   for (const [k, v] of Object.entries(P)) if (v !== DEF[k] && k !== 'view' && !(k === 'font' && v === '__custom')) sp.set(k, typeof v === 'boolean' ? (v ? 1 : 0) : v);
+  if (custom) sp.set('cf', customName());
+  if (edits.rm.length || edits.add.length) sp.set('e', packEdits());
   history.replaceState(null, '', '#' + sp.toString());
-  try { localStorage.setItem('sparkleflock.v1', JSON.stringify({ P: { ...P, font: P.font === '__custom' ? DEF.font : P.font }, edits })); } catch {}
+  try { localStorage.setItem('sparkleflock.v1', JSON.stringify({ P: { ...P, font: custom ? DEF.font : P.font }, edits, customFont: custom ? customName() : undefined })); } catch {}
 }
 function readHash() {
   if (location.hash.length < 2) return false;
   const sp = new URLSearchParams(location.hash.slice(1)), p = { ...DEF };
+  if (sp.has('e')) edits = unpackEdits(sp.get('e'));
+  if (sp.has('cf')) lostFont = sp.get('cf').slice(0, 80);
   for (const [k, v] of sp) {
     if (!(k in DEF)) continue;
     p[k] = typeof DEF[k] === 'boolean' ? v === '1' : typeof DEF[k] === 'number' ? (isFinite(+v) ? +v : DEF[k]) : v;
@@ -1583,9 +1759,17 @@ function readHash() {
   P = p; return true;
 }
 function load() {
-  try { const s = JSON.parse(localStorage.getItem('sparkleflock.v1')); if (s) { P = { ...DEF, ...s.P }; edits = s.edits || edits; } } catch {}
+  try { const s = JSON.parse(localStorage.getItem('sparkleflock.v1')); if (s) { stored = true; P = { ...DEF, ...s.P }; edits = cleanEdits(s.edits); if (typeof s.customFont === 'string') lostFont = s.customFont.slice(0, 80); } } catch {}
 }
 function sanitize() {
+  // a link or old storage can hold anything: wrong types go back to the default, numbers into their control's range
+  for (const k in P) if (!(k in DEF)) delete P[k];
+  for (const k in DEF) if (typeof P[k] !== typeof DEF[k] || (typeof P[k] === 'number' && !isFinite(P[k]))) P[k] = DEF[k];
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  for (const k of sliders) P[k] = clamp(P[k], +$(k + 'R').min, +$(k + 'R').max);
+  if (!['left', 'center', 'right'].includes(P.align)) P.align = DEF.align;
+  if (!['mm', 'in'].includes(P.units)) P.units = DEF.units;
+  if (!['stones', 'template'].includes(P.view)) P.view = DEF.view;
   if (!window.FONT_LIST.some(f => f[0] === P.font)) P.font = DEF.font;
   if (!STONES.some(s => s[0] === P.stone)) P.stone = DEF.stone;
   if (P.inner !== 'same' && !STONES.some(s => s[0] === P.inner && s[0] !== 'custom')) P.inner = DEF.inner;
@@ -1593,6 +1777,7 @@ function sanitize() {
   if (!COLOURS.some(c => c[0] === P.colour)) P.colour = DEF.colour;
   if (!(P.height > 0)) P.height = DEF.height;
   if (!(P.stretch > 0)) P.stretch = 1;
+  P.height = clamp(P.height, 1, 2000); P.stretch = clamp(P.stretch, 0.02, 50);
   if (![0, 45, 90, -45].includes(P.rotate)) P.rotate = 0;
   if (P.fill === 'packed') P.fill = 'rings';
   if (![...$('fill').options].some(o => o.value === P.fill)) P.fill = DEF.fill;
@@ -1609,7 +1794,7 @@ function exportGeometry() {
     W, H: built.ext.h, r: built.hole / 2,
   };
 }
-const fileBase = () => 'rhinestone_' + (P.text.replace(/\s+/g, '_').replace(/[^\w-]/g, '').slice(0, 30) || 'template');
+const fileBase = () => 'rhinestone_' + (P.text.trim().replace(/\s+/g, '_').replace(/[^\p{L}\p{N}\p{M}_-]/gu, '').slice(0, 30) || 'template');
 function download(name, data, type) {
   const a = document.createElement('a'), url = URL.createObjectURL(new Blob([data], { type }));
   a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
@@ -1655,17 +1840,28 @@ const FORMATS = {
   svg: ['image/svg+xml', makeSvg], dxf: ['application/dxf', makeDxf], png: ['image/png', makePng],
 };
 async function exportFiles(kinds = Object.keys(FORMATS)) {
-  if (!built?.stones.length) return [];
+  await flush();
+  if (notices.has('err')) return []; // the last build failed, so `built` is not this design
+  if (!built?.stones.length) { notice('export', P.text.trim() ? 'Nothing to export: there are no stones in this design.' : 'Nothing to export yet: type some text first.', 6000); return []; }
+  clearNotice('export');
   const out = [];
   for (const k of kinds) { const [type, make] = FORMATS[k]; out.push(new File([await make()], fileBase() + '.' + k, { type })); }
   return out;
 }
-async function exportOne(kind) { for (const f of await exportFiles([kind])) download(f.name, f, f.type); }
+// after a download: where the file went and what to do with it
+const USE = { svg: 'Open it in Cricut Design Space (Upload) or your cutter software', dxf: 'Open it in Silhouette Studio', png: 'This is a picture to look at, not a cutting file' };
+function savedNote(name, kind) {
+  const size = `${fmtLen(built.ext.w)} × ${fmtLen(built.ext.h)}`;
+  notice('saved', `Saved <b>${esc(name)}</b> to your downloads. ` + (kind ? USE[kind] + (kind === 'png' ? '.' : ` and check that the size is ${size}.`) : `Use the SVG or the DXF in your cutter software and check that the size is ${size}.`) +
+    (kind === 'svg' ? ' <button data-goto="export">Other formats</button>' : '') + ' <button data-goto="tips">What next?</button>', 20000);
+}
+async function exportOne(kind) { for (const f of await exportFiles([kind])) { download(f.name, f, f.type); savedNote(f.name, kind); } }
 const exportSvg = () => exportOne('svg'), exportDxf = () => exportOne('dxf'), exportPng = () => exportOne('png');
 // all formats as separate downloads (browsers may ask once to allow several files)
 async function exportAll() {
   const files = await exportFiles();
   for (let i = 0; i < files.length; i++) { download(files[i].name, files[i], files[i].type); await new Promise(r => setTimeout(r, 350)); }
+  if (files.length) savedNote(fileBase() + ' (3 files)');
 }
 // a ZIP file holding the given files, stored without compression (the files are small)
 async function zipFiles(files) {
@@ -1694,7 +1890,7 @@ async function zipFiles(files) {
 }
 async function exportZip() {
   const files = await exportFiles();
-  if (files.length) { const z = await zipFiles(files); download(z.name, z, z.type); }
+  if (files.length) { const z = await zipFiles(files); download(z.name, z, z.type); savedNote(z.name); }
 }
 // hand the files to the device's share sheet (mail, messages, cloud drives ...). Needs a browser
 // that can share files, which is most phones; the ZIP is used when the loose files are refused.
@@ -1712,10 +1908,22 @@ async function shareFiles() {
 
 /* ---------- start ---------- */
 fillSelects(); addResets(); bind();
-if (!readHash()) load();
+const linked = readHash();
+if (!linked) load();
+// a first visit from a US browser starts in inches (the cutting mats there are sold in inches)
+if (!linked && !stored && /^en-US$/i.test(navigator.language || '')) P.units = 'in';
 sanitize();
+lastGeo = geoKey();
+if (lostFont) {
+  edits = { rm: [], add: [] }; // they were placed on the other font's letters
+  notice('font', `This design used the uploaded font “${esc(lostFont)}”, which is not kept in links or between visits. It is shown in ${esc(window.FONT_LIST.find(f => f[0] === P.font)?.[1] || 'a bundled font')}: upload the font again under Text to get it back.`);
+}
+{ let seen = stored; try { seen ||= !!localStorage.getItem('sparkleflock.seen'); } catch {}
+  if (!seen && !linked) notice('hello', matchMedia('(max-width: 700px)').matches
+    ? `<b>Start here:</b> type your own text over ${esc(DEF.text)} at the top, then work through the tabs at the bottom, from Text to Export.`
+    : `<b>Start here:</b> type your own text over ${esc(DEF.text)} at the top. Then go through the tabs to pick the font, the size and your stones, and Export for the cutting file.`); }
 $('text').value = P.text;
 syncUi();
 resize();
-rebuild().then(() => { syncUi(); snap(); fit(); });
+runBuild().then(() => { snap(); fit(); });
 window.sparkleflock = { get built() { return built; }, get P() { return P; }, rebuild };

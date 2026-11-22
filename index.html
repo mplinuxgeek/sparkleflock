@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sparkleflock</title>
+<meta name="description" content="Free rhinestone template generator: type text, pick a font and stone size, and export the holes at real size as SVG, DXF or PNG for Cricut, Silhouette and other cutters.">
+<meta name="theme-color" content="#1e2129">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sparkleflock">
+<meta property="og:title" content="Sparkleflock: rhinestone templates from text">
+<meta property="og:description" content="Type text, pick a font and stone size, and export the holes at real size as SVG, DXF or PNG for Cricut, Silhouette and other cutters.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Sparkleflock: rhinestone templates from text">
+<meta name="twitter:description" content="Type text, pick a font and stone size, and export the holes at real size as SVG, DXF or PNG for Cricut, Silhouette and other cutters.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <style>
   :root {
@@ -12,7 +21,7 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  #app { display: grid; grid-template-rows: auto auto 1fr; height: 100vh; }
+  #app { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto 1fr; height: 100vh; }
   #top { background: var(--panel); border-bottom: 1px solid var(--line); padding: 8px 14px 0; }
   #top .bar { display: flex; align-items: center; gap: 12px; }
   #top .brand { white-space: nowrap; }
@@ -29,6 +38,7 @@
   #tabs button { background: transparent; color: var(--muted); border-radius: 7px 7px 0 0; padding: 7px 14px; font-weight: 600; white-space: nowrap; border-bottom: 2px solid transparent; }
   #tabs button:hover { color: var(--text); background: #ffffff0a; }
   #tabs button.on { color: var(--accent2); border-bottom-color: var(--accent2); background: var(--panel2); }
+  #tabs [role=tablist] { display: flex; gap: inherit; flex: 1 0 auto; }
   #tabs .hide { margin-left: auto; padding: 7px 10px; }
   #app.collapsed #tabs .hide { visibility: hidden; }
   #panel { background: var(--panel2); border-bottom: 1px solid var(--line); max-height: 42vh; overflow-y: auto; }
@@ -57,12 +67,23 @@
   button.ghost:hover { border-color: var(--accent); }
   button.on { background: var(--accent); border-color: var(--accent); }
   button:disabled { opacity: .4; cursor: default; }
+  :focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
+  input[type=number]:focus-visible, input[type=text]:focus-visible, select:focus-visible, textarea:focus-visible, #tabs button:focus-visible, .seg button:focus-visible { outline-offset: -2px; }
+  .nar { display: none; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
   .seg button { background: transparent; border-radius: 0; padding: 4px 10px; font-weight: 500; }
   .seg button.on { background: var(--accent); }
   .hint { color: var(--muted); font-size: 12px; margin: 4px 0; }
   .warn { color: var(--warn); font-size: 12px; margin: 4px 0; }
+  .hint b { color: #c7cad3; }
+  details.adv { margin: 8px 0 4px; border-top: 1px solid var(--line); }
+  details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; padding: 7px 0 5px; }
+  details.adv summary:hover { color: var(--text); }
+  details.adv summary .n { color: var(--accent2); font-weight: 500; }
+  .exp { display: grid; grid-template-columns: 132px 1fr; gap: 10px; align-items: center; margin: 6px 0; font-size: 12.5px; color: #c7cad3; max-width: 560px; }
+  .exp b { color: var(--text); }
   .swatches { display: flex; flex-wrap: wrap; gap: 5px; }
   .swatches button { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
   .swatches button.on { border-color: #fff; }
@@ -78,11 +99,25 @@
   #msg { position: absolute; left: 52px; top: 74px; max-width: 520px; }
   #msg div { background: #3a2f1ce8; color: var(--warn); border-radius: 6px; padding: 5px 9px; margin-bottom: 4px; font-size: 12px; }
   #msg button { margin-left: 6px; padding: 3px 9px; font-size: 12px; background: var(--warn); color: #221a0c; }
+  #msg div.info { background: #1b1d24f0; color: var(--text); border: 1px solid var(--accent); font-size: 13px; }
+  #msg div.info button { background: var(--accent); color: var(--text); }
   #editHint { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); background: #1b1d24e8; border: 1px solid var(--accent); border-radius: 6px; padding: 5px 12px; font-size: 13px; }
   #busy { position: absolute; bottom: 40px; right: 14px; color: var(--muted); font-size: 12px; }
+  #empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 0 56px; text-align: center; color: var(--muted); font-size: 16px; pointer-events: none; }
+  #help { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 0; width: 560px; max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); }
+  #help::backdrop { background: #0b0c10b0; }
+  #help .in { padding: 14px 18px 16px; }
+  #help h2 { font-size: 16px; margin: 0 0 8px; display: flex; align-items: center; justify-content: space-between; }
+  #help h3 { font-size: 12px; margin: 12px 0 4px; color: var(--accent2); text-transform: uppercase; letter-spacing: .5px; }
+  #help dl { display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; margin: 0; font-size: 13px; }
+  #help dt { white-space: nowrap; }
+  #help dd { margin: 0; color: #c7cad3; }
+  noscript p { margin: 0; padding: 12px 16px; background: #3a2f1c; color: var(--warn); text-align: center; }
   .help p { margin: 6px 0; font-size: 12.5px; color: #c7cad3; }
   .help b { color: var(--text); }
   kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font-size: 11px; }
+  /* narrow windows: the stone count goes under the preview buttons instead of beside them */
+  @media (min-width: 701px) and (max-width: 1180px) { #stats { top: 50px; } #msg { top: 114px; } }
   @media (max-width: 800px) {
     #top { padding: 8px 10px 0; }
     #top .bar { flex-wrap: wrap; gap: 8px; }
@@ -100,8 +135,9 @@
     #top { display: contents; }
     #top .bar { grid-row: 1; background: var(--panel); border-bottom: 1px solid var(--line); padding: 8px 10px; gap: 6px; }
     #top .bar .w { display: none; }
-    #top .undo { gap: 6px; }
-    #top .bar button, #donate { min-height: 40px; min-width: 38px; display: inline-flex; align-items: center; justify-content: center; padding: 6px 9px; }
+    .nar { display: inline; }
+    h1 { font-size: 17px; letter-spacing: 0; }
+    #top .bar button, #donate { min-height: 40px; min-width: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 6px 9px; }
     #top .undo { gap: 4px; }
     #top #text { height: 44px; font-size: 18px; min-width: 0; }
     main { grid-row: 2; }
@@ -121,14 +157,18 @@
     input[type=number], input[type=text], select, textarea { font-size: 16px; min-height: 42px; }
     input[type=range] { height: 42px; }
     input[type=checkbox] { width: 22px; height: 22px; flex: none; }
-    .check { font-size: 15px; margin: 12px 0; padding-right: 40px; }
-    .rst { width: 36px; height: 36px; font-size: 18px; top: auto; bottom: 3px; transform: none; }
+    .check { font-size: 15px; margin: 6px 0; padding-right: 44px; min-height: 40px; }
+    .rst { width: 40px; height: 40px; font-size: 18px; top: auto; bottom: 1px; transform: none; }
     .check .rst { bottom: auto; top: 50%; transform: translateY(-50%); }
     .seg button { padding: 10px 16px; }
     .btns button, .pane button.ghost { min-height: 42px; padding: 8px 16px; }
-    .swatches { gap: 10px; }
-    .swatches button { width: 34px; height: 34px; }
+    .swatches { gap: 8px; }
+    .swatches button { width: 40px; height: 40px; }
     .hint { font-size: 13px; }
+    details.adv summary { font-size: 15px; padding: 11px 0; min-height: 42px; }
+    .exp { grid-template-columns: 124px 1fr; font-size: 13px; margin: 8px 0; max-width: none; }
+    .exp button { min-height: 42px; }
+    #msg button { min-height: 40px; min-width: 40px; margin: 4px 0 2px 6px; }
     .help p { font-size: 14px; }
     main { display: flex; flex-direction: column; }
     canvas#view { position: static; flex: 1 1 0; min-height: 0; height: auto; }
@@ -145,120 +185,191 @@
 </style>
 </head>
 <body>
+<noscript><p>Sparkleflock needs JavaScript to place the stones. Turn JavaScript on in your browser and reload this page.</p></noscript>
 <div id="app">
   <header id="top">
     <div class="bar">
       <h1 class="brand">Sparkle<span>flock</span></h1>
-      <textarea id="text" rows="1" spellcheck="false" placeholder="Type your text (Enter = new line)"></textarea>
-      <div class="hint texthint">Rhinestone templates from text, for Cricut, Silhouette and other cutters. Enter starts a new line.</div>
-      <div class="undo"><button id="undo" class="ghost" title="Undo (Ctrl+Z)">↶</button><button id="redo" class="ghost" title="Redo (Ctrl+Shift+Z)">↷</button></div>
-      <a id="donate" href="https://www.paypal.com/donate/?hosted_button_id=PZVZSNGSJVZF8" target="_blank" rel="noopener" title="Support Sparkleflock via PayPal">♥<span class="w">&nbsp;Donate</span></a>
-      <button class="ghost" id="copyLink" title="Copy a link that opens this design"><span class="w">Copy&nbsp;</span>link</button>
-      <button id="expSvgTop" title="Export the template as SVG (more formats under Export)">Export<span class="w">&nbsp;SVG</span></button>
+      <textarea id="text" rows="1" spellcheck="false" aria-label="Text for the template" placeholder="Type your text (Enter = new line)"></textarea>
+      <div class="hint texthint">← Your text. Enter = new line</div>
+      <div class="undo"><button id="undo" class="ghost" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button><button id="redo" class="ghost" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button></div>
+      <a id="donate" href="https://www.paypal.com/donate/?hosted_button_id=PZVZSNGSJVZF8" target="_blank" rel="noopener" title="Support Sparkleflock via PayPal" aria-label="Donate via PayPal"><span aria-hidden="true">♥</span><span class="w">&nbsp;Donate</span></a>
+      <button class="ghost" id="copyLink" title="Copy a link that opens this design: keep it for yourself or send it to someone"><span class="w">Copy&nbsp;</span>link</button>
+      <button id="expSvgTop" title="Download the cutting file as SVG (Ctrl+S). DXF and PNG are under Export">Export<span class="w">&nbsp;SVG</span></button>
     </div>
-    <nav id="tabs" role="tablist"><button data-tab="text" role="tab">Text</button><button data-tab="size" role="tab">Size</button><button data-tab="stones" role="tab"><span class="w">Rhine</span>stones</button><button data-tab="template" role="tab">Template</button><button data-tab="view" role="tab">View</button><button data-tab="export" role="tab">Export</button><button data-tab="tips" role="tab">Tips</button><button id="tabHide" class="hide" title="Hide settings (click a tab to reopen)">▴</button></nav>
+    <nav id="tabs" aria-label="Settings"><div role="tablist" aria-label="Settings"><button data-tab="text" id="tab-text" role="tab" aria-controls="pane-text">Text</button><button data-tab="size" id="tab-size" role="tab" aria-controls="pane-size">Size</button><button data-tab="stones" id="tab-stones" role="tab" aria-controls="pane-stones"><span class="w">Rhine</span>stones</button><button data-tab="template" id="tab-template" role="tab" aria-controls="pane-template">Template</button><button data-tab="view" id="tab-view" role="tab" aria-controls="pane-view">View</button><button data-tab="export" id="tab-export" role="tab" aria-controls="pane-export">Export</button><button data-tab="tips" id="tab-tips" role="tab" aria-controls="pane-tips">Tips</button></div><button id="tabHide" class="hide" title="Hide settings (click a tab to reopen)" aria-label="Hide settings">▴</button></nav>
   </header>
   <div id="panel">
-    <section class="pane" data-tab="text" role="tabpanel" hidden><div class="sec">
-      <div class="row wide"><label for="font">Font</label><select id="font"></select></div>
-      <div class="row wide"><label></label><div><button class="ghost" id="fontUpBtn" style="padding:4px 10px">Upload font…</button><input type="file" id="fontFile" accept=".ttf,.otf,.woff" hidden></div></div>
-      <div class="row wide"><label>Align lines</label><div class="seg" id="alignSeg"><button data-v="left">Left</button><button data-v="center">Centre</button><button data-v="right">Right</button></div></div>
+    <section id="pane-text" aria-labelledby="tab-text" class="pane" data-tab="text" role="tabpanel" hidden><div class="sec">
+      <div>
+        <div class="row wide"><label for="font">Font</label><select id="font"></select></div>
+        <div class="row wide"><label></label><div><button class="ghost" id="fontUpBtn" style="padding:4px 10px" title="Use a .ttf, .otf or .woff font file from your device">Upload font…</button><input type="file" id="fontFile" accept=".ttf,.otf,.woff" hidden></div></div>
+        <div class="hint">Bold, chunky fonts hold the most stones. Thin fonts get a single row of stones.</div>
+      </div>
+      <div class="hint" id="fontNote" hidden>An uploaded font stays in this tab only: links and reloads fall back to a bundled font.</div>
+      <div class="row wide"><label>Align lines</label><div class="seg" id="alignSeg" role="group" aria-label="Align lines"><button data-v="left">Left</button><button data-v="center">Centre</button><button data-v="right">Right</button></div></div>
       <div class="row"><label for="letterSpR">Letter spacing</label><input type="range" id="letterSpR" min="-20" max="80" step="1"><input type="number" id="letterSp" step="1"><span>%</span></div>
       <div class="row"><label for="wordSpR">Word spacing</label><input type="range" id="wordSpR" min="-30" max="150" step="1"><input type="number" id="wordSp" step="1"><span>%</span></div>
-      <div class="row"><label for="lineSpR">Line spacing</label><input type="range" id="lineSpR" min="80" max="250" step="1"><input type="number" id="lineSp" step="1"><span>%</span></div>
-      <div class="hint">Spacing values are % of the letter height.</div>
+      <div>
+        <div class="row"><label for="lineSpR">Line spacing</label><input type="range" id="lineSpR" min="80" max="250" step="1"><input type="number" id="lineSp" step="1"><span>%</span></div>
+        <div class="hint">Spacing is in % of the letter height. Add letter spacing when the stones of two letters touch.</div>
+      </div>
     </div></section>
 
-    <section class="pane" data-tab="size" role="tabpanel" hidden><div class="sec">
-      <div class="row wide"><label>Units</label><div class="seg" id="unitSeg"><button data-v="mm">mm</button><button data-v="in">inches</button></div></div>
-      <div class="row"><label for="width">Width</label><input type="range" id="widthR"><input type="number" id="width" step="any" min="1"><span class="unit"></span></div>
-      <div class="row"><label for="height">Height</label><input type="range" id="heightR"><input type="number" id="height" step="any" min="1"><span class="unit"></span></div>
-      <label class="check"><input type="checkbox" id="lock"> Keep proportions</label>
-      <div class="btns"><button class="ghost" id="resetStretch">Reset proportions</button></div>
-      <div class="hint">Width and height of the letter outlines. Stones keep their size; bigger letters get more stones.</div>
+    <section id="pane-size" aria-labelledby="tab-size" class="pane" data-tab="size" role="tabpanel" hidden><div class="sec">
+      <div class="row wide"><label>Units</label><div class="seg" id="unitSeg" role="group" aria-label="Units"><button data-v="mm">mm</button><button data-v="in">inches</button></div></div>
+      <div class="row"><label for="widthR">Width</label><input type="range" id="widthR"><input type="number" id="width" step="any" min="1"><span class="unit"></span></div>
+      <div class="row"><label for="heightR">Height</label><input type="range" id="heightR"><input type="number" id="height" step="any" min="1"><span class="unit"></span></div>
+      <div>
+        <label class="check"><input type="checkbox" id="lock"> Keep proportions (width and height change together)</label>
+        <div class="btns" id="stretchRow"><button class="ghost" id="resetStretch" title="Put the letters back to the font's normal proportions">Reset proportions</button></div>
+      </div>
+      <div class="hint">The finished size of the whole design. The stones stay the same size: a bigger design gets more stones. As a guide, a design across the chest of an adult T-shirt is usually 200 to 280 mm (8 to 11 in) wide.</div>
     </div></section>
 
-    <section class="pane" data-tab="stones" role="tabpanel" hidden><div class="sec">
-      <div class="row wide"><label for="stone">Stone size</label><select id="stone"></select></div>
-      <div class="row wide"><label for="inner">Inner stones</label><select id="inner"></select></div>
-      <div class="row" id="customRow"><label for="custom">Stone Ø</label><input type="range" id="customR" min="1" max="10" step="0.1"><input type="number" id="custom" step="0.1"><span>mm</span></div>
-      <div class="row"><label for="allowR">Hole allowance</label><input type="range" id="allowR" min="0" max="1" step="0.05"><input type="number" id="allow" step="0.05"><span>mm</span></div>
-      <div class="row"><label for="gapR">Stone spacing</label><input type="range" id="gapR" min="0.2" max="4" step="0.1"><input type="number" id="gap" step="0.1"><span>mm</span></div>
-      <div class="hint" id="stoneInfo"></div>
-      <div class="row wide"><label for="fill">Pattern</label>
-        <select id="fill">
-          <option value="auto">Auto (single line or outline + fill)</option>
-          <option value="centre">Single line (stroke centre)</option>
-          <option value="outline">Outline only</option>
-          <option value="flow">Outline + lines along the stroke</option>
-          <option value="rings">Outline + nested fill</option>
-          <option value="outhex">Outline + grid fill</option>
-          <option value="hex">Grid fill</option>
-        </select></div>
-      <div class="row"><label for="insetR">Edge inset</label><input type="range" id="insetR" min="-1.5" max="2" step="0.1"><input type="number" id="inset" step="0.1"><span>mm</span></div>
-      <div class="row"><label for="boldR">Thicken letters</label><input type="range" id="boldR" min="-2" max="4" step="0.1"><input type="number" id="bold" step="0.1"><span>mm</span></div>
-      <div class="hint">Spacing is the gap between neighbouring holes. Lines along the stroke put an even row of stones around each letter, then run lines of stones through the middle of each stroke (more than one where it is wide enough), offset to sit in the gaps. Nested fill sits each next row in the gaps of the row outside it. Inner stones can be a different size from the outline row (for example SS10 outline, SS8 inside). Inset moves stones in from the letter edge (negative lets them overhang). Thicken fattens or thins the font.</div>
+    <section id="pane-stones" aria-labelledby="tab-stones" class="pane" data-tab="stones" role="tabpanel" hidden><div class="sec">
+      <div>
+        <div class="row wide"><label for="stone">Stone size</label><select id="stone"></select></div>
+        <div class="row" id="customRow"><label for="customR">Stone diameter</label><input type="range" id="customR" min="1" max="10" step="0.1"><input type="number" id="custom" step="0.1"><span>mm</span></div>
+        <div class="hint">The SS number is printed on the stone packet. No SS number? Choose Custom size and enter the stone's diameter in mm.</div>
+      </div>
+      <div>
+        <div class="row wide"><label for="fill">Pattern</label>
+          <select id="fill">
+            <option value="auto">Automatic (recommended)</option>
+            <option value="centre">Single row</option>
+            <option value="outline">Outline only</option>
+            <option value="flow">Outline + rows along the letter</option>
+            <option value="rings">Outline + rings inside</option>
+            <option value="outhex">Outline + honeycomb fill</option>
+            <option value="hex">Honeycomb fill only</option>
+          </select></div>
+        <div class="hint" id="fillInfo"></div>
+      </div>
+      <div>
+        <div class="row"><label for="gapR" title="The gap between neighbouring holes">Stone spacing</label><input type="range" id="gapR" min="0.2" max="4" step="0.1"><input type="number" id="gap" step="0.1"><span>mm</span></div>
+        <div class="hint">The gap between neighbouring holes. Smaller: more stones and more sparkle, but under about 0.5 mm the template material between the holes tears easily.</div>
+      </div>
+      <details class="adv" id="advStones"><summary>Advanced<span class="n"></span></summary>
+        <div class="row wide"><label for="inner" title="Inner stones: the stones inside the outline row">Fill stone size</label><select id="inner"></select></div>
+        <div class="hint">The stones inside a letter can be a different size from the row around its edge, for example SS10 outline with SS8 inside.</div>
+        <div class="row"><label for="allowR" title="Hole allowance">Extra hole width</label><input type="range" id="allowR" min="0" max="1" step="0.05"><input type="number" id="allow" step="0.05"><span>mm</span></div>
+        <div class="hint" id="stoneInfo"></div>
+        <div class="row"><label for="insetR" title="Edge inset">Move in from edge</label><input type="range" id="insetR" min="-1.5" max="2" step="0.1"><input type="number" id="inset" step="0.1"><span>mm</span></div>
+        <div class="hint">Moves the stones in from the edge of the letter. A negative value lets them hang over the edge.</div>
+        <div class="row"><label for="boldR">Thicken letters</label><input type="range" id="boldR" min="-2" max="4" step="0.1"><input type="number" id="bold" step="0.1"><span>mm</span></div>
+        <div class="hint">Fattens the letters so more stones fit. A negative value thins them.</div>
+      </details>
     </div></section>
 
-    <section class="pane" data-tab="template" role="tabpanel" hidden><div class="sec">
-      <div class="row wide"><label for="mat">Mat / sheet</label><select id="mat"></select></div>
-      <div class="row wide"><label for="rotate">Rotate</label><select id="rotate"><option value="0">No rotation</option><option value="45">45° (longest fit on a square mat)</option><option value="-45">−45°</option><option value="90">90°</option></select></div>
-      <label class="check"><input type="checkbox" id="border"> Cut a border around the design</label>
-      <div class="row" id="borderRow"><label for="borderM">Border margin</label><input type="range" id="borderMR" min="2" max="30" step="0.5"><input type="number" id="borderM" step="any"><span class="unit"></span></div>
-      <label class="check"><input type="checkbox" id="expOutline"> Include letter outlines in export (separate layer, don't cut)</label>
-      <label class="check"><input type="checkbox" id="mirror"> Mirror (flip horizontally)</label>
+    <section id="pane-template" aria-labelledby="tab-template" class="pane" data-tab="template" role="tabpanel" hidden><div class="sec">
+      <div>
+        <div class="row wide"><label for="mat">Cutting mat</label><select id="mat"></select></div>
+        <div class="hint">The mat is drawn in the preview so you can see whether the design fits. It is not part of the exported file.</div>
+      </div>
+      <div class="row wide"><label for="rotate">Rotate</label><select id="rotate"><option value="0">No rotation</option><option value="45">45° (a long word fits corner to corner)</option><option value="-45">−45°</option><option value="90">90°</option></select></div>
+      <div>
+        <label class="check"><input type="checkbox" id="border"> Cut a border around the design</label>
+        <div class="row" id="borderRow"><label for="borderMR">Border margin</label><input type="range" id="borderMR" min="2" max="30" step="0.5"><input type="number" id="borderM" step="any"><span class="unit"></span></div>
+        <div class="hint">The border is a rectangle that cuts the template out as a neat piece, so you don't have to trim it by hand.</div>
+      </div>
+      <details class="adv" id="advTemplate"><summary>Advanced<span class="n"></span></summary>
+        <label class="check"><input type="checkbox" id="expOutline"> Add the letter outlines to the file (a separate layer: don't cut it)</label>
+        <label class="check"><input type="checkbox" id="mirror"> Mirror the template (flip left to right)</label>
+        <div class="hint">Rhinestone templates are normally <b>not</b> mirrored: the stones are brushed in face up and lifted with transfer tape, so they reach the shirt the right way round.</div>
+      </details>
     </div></section>
 
-    <section class="pane" data-tab="view" role="tabpanel" hidden><div class="sec">
+    <section id="pane-view" aria-labelledby="tab-view" class="pane" data-tab="view" role="tabpanel" hidden><div class="sec">
       <label class="check"><input type="checkbox" id="showOutline"> Show letter outlines</label>
       <label class="check"><input type="checkbox" id="showGrid"> Show grid</label>
-      <div class="row wide"><label>Stone colour</label><div class="swatches" id="colours"></div></div>
+      <div class="row wide"><label>Stone colour</label><div class="swatches" id="colours" role="group" aria-label="Stone colour"></div></div>
+      <div class="hint">These change the preview only (the colour also shows in the PNG picture). The cutting file stays the same.</div>
     </div></section>
 
-    <section class="pane" data-tab="export" role="tabpanel" hidden><div class="sec">
-      <div class="hint">All formats at once:</div>
-      <div class="btns">
-        <button id="expZip" title="SVG, DXF and PNG in one ZIP file">Download all (ZIP)</button>
-        <button id="expAll" class="ghost" title="SVG, DXF and PNG as three separate downloads">Download all (3 files)</button>
-        <button id="expShare" class="ghost" title="Send the files with your mail or messaging app" hidden>Share / email…</button>
+    <section id="pane-export" aria-labelledby="tab-export" class="pane" data-tab="export" role="tabpanel" hidden><div class="sec">
+      <div>
+        <div class="hint">Download the file your cutter software opens:</div>
+        <div class="exp"><button id="expSvg" title="Best for Cricut Design Space and Silhouette Studio Designer Edition">SVG</button><span><b>Cricut Design Space</b>, Silhouette Studio Designer Edition or higher, Brother CanvasWorkspace and most other cutter software.</span></div>
+        <div class="exp"><button id="expDxf" class="ghost" title="For Silhouette Studio Basic Edition and CAD software">DXF</button><span><b>Silhouette Studio Basic Edition</b> (the free edition, which does not open SVG) and CAD software.</span></div>
+        <div class="exp"><button id="expPng" class="ghost" title="Picture of the finished stones, not for cutting">PNG picture</button><span>A picture of the finished stones, to show someone. Not for cutting.</span></div>
       </div>
-      <div class="hint">One format:</div>
-      <div class="btns">
-        <button id="expSvg" class="ghost" title="Best for Cricut Design Space and Silhouette Studio Designer Edition">SVG</button>
-        <button id="expDxf" class="ghost" title="For Silhouette Studio Basic Edition and CAD software">DXF</button>
-        <button id="expPng" class="ghost" title="Picture of the stone layout (mockup)">PNG mockup</button>
+      <div>
+        <div class="hint">Not sure, or want to keep everything? All three files at once:</div>
+        <div class="btns">
+          <button id="expZip" class="ghost" title="SVG, DXF and PNG in one ZIP file">Download all (ZIP)</button>
+          <button id="expAll" class="ghost" title="SVG, DXF and PNG as three separate downloads">Download all (3 files)</button>
+          <button id="expShare" class="ghost" title="Send the files with your mail or messaging app" hidden>Share / email…</button>
+        </div>
+        <div class="hint" id="shareNote" hidden>Share / email opens your device's share sheet with the files attached, so you can mail them to yourself.</div>
+        <div class="hint" id="shareHint" hidden>This browser can't attach files to an email for you. Download the ZIP and attach it, or open this page on a phone to use Share / email.</div>
       </div>
-      <div class="hint">Exports are at real size in mm, with the holes at your stone size plus the allowance. Share / email opens your device's share sheet with the files attached, so you can mail them to yourself.</div>
-      <div class="hint" id="shareHint" hidden>This browser can't attach files to an email for you. Download the ZIP and attach it, or open this page on a phone to use Share / email.</div>
-      <div class="btns"><button class="ghost" id="resetAll">Reset all</button></div>
+      <div>
+        <div class="hint" id="expInfo"></div>
+        <div class="hint"><b>Next:</b> open the file in your cutter software, cut the holes from rhinestone template material (flock), brush the stones in, then lift them with transfer tape and press them onto the shirt.</div>
+        <div class="btns"><button class="ghost" data-goto="tips">Step by step…</button><button class="ghost" id="resetAll" title="Put every setting back to its default and remove manual stone edits (Undo brings them back)">Start again (reset all)</button></div>
+      </div>
     </div></section>
 
-    <section class="pane help" data-tab="tips" role="tabpanel" hidden><div class="sec">
+    <section id="pane-tips" aria-labelledby="tab-tips" class="pane help" data-tab="tips" role="tabpanel" hidden><div class="sec">
+      <p><b>1. Design:</b> type your text at the top, then pick a font under <b>Text</b>, the finished size under <b>Size</b> and the stone size you own under <b>Rhinestones</b>. The box above the preview shows how many stones to buy.</p>
+      <p><b>2. Download</b> the cutting file under <b>Export</b>: SVG for Cricut Design Space, DXF for Silhouette Studio Basic Edition.</p>
       <p><b>Cricut Design Space:</b> Upload → SVG. The size is kept. Select everything and <b>Attach</b> so the holes cut in place, then cut on template material (sticky flock or flock) with the setting for that material.</p>
       <p><b>Silhouette Studio:</b> Designer Edition opens the SVG. Basic Edition: use the DXF and check the size after import.</p>
-      <p><b>Small holes</b> (SS6 and below) can tear flock. Slow the blade, use 2 passes, or step up to SS10.</p>
-      <p><b>Editing:</b> turn on <b>Edit stones</b> above the preview, then click a stone to remove it or click an empty spot to add one. <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes.</p>
-      <p><b>View:</b> drag to pan, wheel or <kbd>+</kbd>/<kbd>-</kbd> to zoom, <kbd>0</kbd> to fit. On a touch screen, drag with one finger and pinch with two.</p>
+      <p><b>3. Cut and fill:</b> cut the holes from the template material and weed them out. Brush the stones over the template until every hole holds one, face up. Lift them with transfer tape, lay the tape on the shirt and press as the stone maker says.</p>
       <p>Templates don't need mirroring: stones are brushed in face up and lifted with transfer tape. Mirror only for special cases.</p>
+      <p><b>Stone sizes:</b> SS is the size number on the stone packet; the stone size list gives each one in mm. <b>Small holes</b> (SS6 and below) can tear flock. Slow the blade, use 2 passes, or step up to SS10.</p>
+      <p><b>Editing:</b> turn on <b>Edit stones</b> above the preview, then click a stone to remove it or click an empty spot to add one. <kbd>Ctrl</kbd>+<kbd>Z</kbd> or the ↶ button undoes. Finish the text, size and stones first: changing them clears the edits.</p>
+      <p><b>View:</b> drag to pan, wheel or <kbd>+</kbd>/<kbd>-</kbd> to zoom, <kbd>0</kbd> to fit. On a touch screen, drag with one finger and pinch with two.</p>
+      <p><b>Saving:</b> the design is kept in this browser, so it is still here when you come back. <b>Copy link</b> gives a link that opens the same design anywhere: keep it or send it to someone.</p>
+      <p><button class="ghost" id="helpTips">All shortcuts and gestures…</button></p>
     </div></section>
   </div>
 
   <main>
-    <canvas id="view"></canvas>
-    <div id="stats"></div>
-    <div id="msg"></div>
+    <canvas id="view" role="img" aria-label="Preview of the template"></canvas>
+    <div id="empty" hidden></div>
+    <div id="stats" role="status"></div>
+    <div id="msg" role="status"></div>
     <div id="toolbar">
-      <button id="editBtn" title="Click stones to remove them, click empty space to add">✎ Edit<span class="w"> stones</span></button>
-      <button id="clearEdits" title="Remove all manual edits">Clear<span class="w"> edits</span></button>
-      <button id="viewBtn" title="Switch between stones and template (holes)">Template view</button>
-      <button id="zoomOut" title="Zoom out (-)">−</button>
-      <button id="zoomIn" title="Zoom in (+)">+</button>
+      <button id="editBtn" title="Fix single stones by hand: click a stone to remove it, click empty space to add one (E)" aria-pressed="false">✎ Edit<span class="w"> stones</span></button>
+      <button id="clearEdits" title="Take back all manual stone edits: removed stones return, added stones go">Clear<span class="w"> edits</span></button>
+      <button id="viewBtn" title="Switch the preview between the stones and the holes that will be cut" aria-pressed="false"><span class="w">Show holes</span><span class="nar">Holes</span></button>
+      <button id="zoomOut" title="Zoom out (-)" aria-label="Zoom out">−</button>
+      <button id="zoomIn" title="Zoom in (+)" aria-label="Zoom in">+</button>
       <button id="fitBtn" title="Fit (0)">Fit</button>
+      <button id="helpBtn" class="w" title="Shortcuts and gestures (?)" aria-label="Shortcuts and gestures">?</button>
     </div>
-    <div id="editHint" hidden>Edit mode: tap a stone to remove it, tap empty space to add one.</div>
+    <div id="editHint" hidden>Edit mode: click a stone to remove it, click empty space to add one.</div>
     <div id="busy"></div>
+    <div id="live" class="sr" role="status"></div>
   </main>
 </div>
+<dialog id="help" aria-labelledby="helpTitle"><div class="in">
+  <h2><span id="helpTitle">Shortcuts and gestures</span><button class="ghost" id="helpClose" aria-label="Close">Close</button></h2>
+  <h3>Keyboard</h3>
+  <dl>
+    <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Undo (<kbd>⌘</kbd> on a Mac)</dd>
+    <dt><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></dt><dd>Redo</dd>
+    <dt><kbd>Ctrl</kbd>+<kbd>S</kbd></dt><dd>Export the SVG</dd>
+    <dt><kbd>+</kbd> / <kbd>-</kbd></dt><dd>Zoom in / out</dd>
+    <dt><kbd>0</kbd></dt><dd>Fit the design in the preview</dd>
+    <dt><kbd>E</kbd></dt><dd>Edit stones on / off</dd>
+    <dt><kbd>Esc</kbd></dt><dd>Leave edit mode, close this help</dd>
+    <dt><kbd>←</kbd> <kbd>→</kbd> <kbd>Home</kbd> <kbd>End</kbd></dt><dd>Switch settings tab (with a tab focused)</dd>
+    <dt><kbd>Enter</kbd></dt><dd>New line (in the text box)</dd>
+    <dt><kbd>?</kbd></dt><dd>Show this help</dd>
+  </dl>
+  <h3>Mouse and touch</h3>
+  <dl>
+    <dt>Drag</dt><dd>Move the preview</dd>
+    <dt>Wheel / pinch</dt><dd>Zoom</dd>
+    <dt>Click or tap (edit mode)</dt><dd>A stone removes it, empty space adds one</dd>
+    <dt>Open tab / ▴</dt><dd>Hides the settings</dd>
+    <dt>↺</dt><dd>Puts one setting back to its default</dd>
+  </dl>
+  <p class="hint">Undo, zoom and the letter keys work when the cursor is not in a text or number box.</p>
+</div></dialog>
 <script src="vendor/opentype.min.js"></script>
 <script src="vendor/clipper.js"></script>
 <script src="fonts/manifest.js"></script>
